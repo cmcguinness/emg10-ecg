@@ -8,6 +8,9 @@ computer over an undocumented USB HID protocol. This project decodes that protoc
 recording to CSV, and renders each one as an ECG-paper report with interval measurements and
 plain-language explanations.
 
+The device's user manual (as the Contec PM10) is available on
+[ManualsLib](https://www.manualslib.com/guide/2991328/contec-pm10-portable-ecg-monitor-manual.html).
+
 ![Example report](docs/example_report.png)
 <sub>Example report generated from a <b>simulated</b> ECG (`tools/make_example.py`), not a real recording.</sub>
 
