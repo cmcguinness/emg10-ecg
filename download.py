@@ -70,6 +70,8 @@ def main():
     ap.add_argument("--force", action="store_true", help="re-download files that already exist")
     ap.add_argument("--replot", action="store_true", help="regenerate PNGs from saved CSVs; no device")
     args = ap.parse_args()
+    print("NOTE: not a medical device. Output is informational only and not a diagnosis; "
+          "see DISCLAIMER.md.", file=sys.stderr)
     if args.replot:
         replot(args.out)
         return

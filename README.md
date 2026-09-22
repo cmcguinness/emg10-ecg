@@ -91,7 +91,7 @@ has no atrial fibrillation detection, and this software doesn't attempt it.
 
 ## Disclaimer
 
-This is not a medical device, and nothing it produces is a diagnosis. The EMG-10 is a consumer
+**Read [DISCLAIMER.md](DISCLAIMER.md) before use.** In short: this is not a medical device, and nothing it produces is a diagnosis. The EMG-10 is a consumer
 single-lead handheld ECG, and its filtering, noise suppression and hand-contact noise distort wave
 shapes and interval measurements. The device's own findings come from its automated screening and
 can include false alarms and misses. The measurements this software adds are automated estimates
@@ -99,3 +99,10 @@ that have not been clinically validated. Discuss any results with a clinician, a
 for symptoms such as chest pain, fainting or severe breathlessness.
 
 Not affiliated with EMAY or Contec.
+
+## License
+
+[MIT No Attribution (MIT-0)](LICENSE): use, copy, modify and redistribute freely, with no
+attribution required. The software is provided "as is", without warranty of any kind, and the
+authors are not liable for any claim or damages arising from its use. See [LICENSE](LICENSE) and
+[DISCLAIMER.md](DISCLAIMER.md).
