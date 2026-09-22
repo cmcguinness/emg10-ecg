@@ -80,7 +80,7 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
 
     margin, header, gap = 12, 22, 6
     fig_w = strip_w + 2 * margin
-    summary_h = (12 + len(a.notes)) * 5 + 12     # summary lines + disclaimer, mm
+    summary_h = (13 + len(a.notes)) * 5 + 12     # summary lines + disclaimer, mm
     fig_h = header + n_strips * (strip_h + gap) + max(beat_h, summary_h) + gap + margin
     fig = plt.figure(figsize=(fig_w * MM, fig_h * MM), dpi=150)
     fig.patch.set_facecolor("white")
@@ -137,15 +137,18 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
                     ha="center", va="bottom", fontsize=6.5, color="#c03030")
             for xi in (lo_i, hi_i):
                 ax.axvline(tt(xi), color="#c03030", lw=0.5, ls=":")
-        ax.set_title(f"Median of {int(a.dominant.sum())} dominant beats  ({BEAT_SPEED} mm/s, {beat_gain} mm/mV)",
+        ax.set_title(f"Median reference beat  ({BEAT_SPEED} mm/s, {beat_gain} mm/mV)",
                      fontsize=7, loc="left")
 
     iv = a.intervals_ms
+    ref_hr = a.reference_rate
     hr_txt = f"{hr:.0f} bpm" if hr else "n/a"
     if device_hr:
         hr_txt += f"   (device: {device_hr} bpm)"
     lines = [
         ("Heart rate", hr_txt),
+        ("Reference beats", (f"{ref_hr:.0f} per min" if ref_hr else "n/a")
+         + (f"   ({a.n_other} other-shape beats)" if a.n_other else "   (all beats alike)")),
         ("RR (median)", _fmt(a.rr_s * 1000 if a.rr_s else None)),
         ("PR", _fmt(iv.get("PR")) if "PR" in iv else
          ("n/a - see note" if a.notes else "n/a - P wave not detectable")),
@@ -153,7 +156,8 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
         ("QT", _fmt(iv.get("QT"))),
         ("QTc Bazett", _fmt(iv.get("QTcB"))),
         ("QTc Fridericia", _fmt(iv.get("QTcF"))),
-        ("Beats", f"{len(a.r_peaks)} detected, {a.n_other} with a different shape (orange, not measured)"),
+        ("Beats", f"{len(a.r_peaks)} detected: {int(a.dominant.sum())} reference (blue), "
+                  f"{a.n_other} other shape (orange)"),
     ]
     if result_codes:
         lines.append(("Device result codes", f"{result_codes[0]}, {result_codes[1]}"))

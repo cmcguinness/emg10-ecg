@@ -32,7 +32,7 @@ def save_csv(path: Path, samples: list[int]):
 
 def save_png(path: Path, info: RecordingInfo, samples: list[int]):
     when = info.recorded_at.strftime("%Y-%m-%d %H:%M:%S") if info.recorded_at else "unknown date"
-    render(path, analyze(samples, device_hr=info.heart_rate), f"EMAY EMG-10 recording  -  {when}",
+    render(path, analyze(samples), f"EMAY EMG-10 recording  -  {when}",
            device_hr=info.heart_rate, result_codes=info.result_codes)
 
 

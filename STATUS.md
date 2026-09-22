@@ -13,7 +13,7 @@ software, and render readable, labelled plots.
 - [x] All 96 recordings downloaded to `recordings/` (gitignored: personal health data)
 - [x] ECG-paper PNGs with median-beat PR/QRS/QT/QTc labels (`ecg_analysis.py`, `ecg_plot.py`);
       `python download.py --replot` regenerates them from the CSVs without the device
-- [ ] Better beat classification (see open threads)
+- [x] Beat classification rebuilt (2026-09-22): raw-peak location, feature grouping, T-wave rejection
 - [x] Amplitude calibrated (500 counts/mV)
 
 ## Key facts
@@ -27,10 +27,16 @@ software, and render readable, labelled plots.
 - The EMAY ECG HD app (for EMG-6L/20) uses the same VID/PID but a different protocol and rejects the EMG-10
 
 ## Open threads
-- 64 of 96 recordings contain many beats with a different shape. The simple correlation grouping
-  misclassifies some of them. Beat classification is cross-checked against the device's HR (±8 bpm);
-  when they disagree, intervals are withheld. Result: 61 recordings with QT, 8 QRS only, 27 withheld.
-  Heart rate matches the device within 3 bpm on 91% of the clean recordings.
+- Beat classification: beats are located on the raw signal, grouped by polarity, amplitude (2x),
+  width (1.5x) and loose shape correlation, and the narrowest large group is the "reference" shape.
+  Same-polarity small detections within 450 ms of a reference beat are dropped as T waves.
+  The report shows both the all-beat rate and the reference-beat rate, next to the device's figure.
+  - Clean recordings (<= 2 other-shape beats, 32 of 96): all-beat rate within 3 bpm of the device on 100%.
+  - Mixed recordings: the device's HR usually falls between our two rates. Its counting rule is
+    unknown (it seems to count some other-shape beats but not all), so it's no longer used as ground truth.
+  - QT measured on 73 recordings. It's skipped when fewer than 5 reference beats are free of
+    other-shape neighbours, or when QT falls outside 260-600 ms (T wave misidentified). PR on 4.
+  - Remaining weak spot: noisy recordings with ambiguous small complexes
 - Device result codes (header bytes 16–17): the Contec app shows codes (1, 0) as "Missed Beat".
   The other codes are unmapped. A table could be built by comparing more recordings in the app.
 - `main.py` is an unused FastAPI stub from project creation

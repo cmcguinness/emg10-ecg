@@ -24,7 +24,7 @@ FS = 250
 COUNTS_PER_MV = 500    # calibrated against the Contec app drawn at 10 mm/mV (R and S waves agree within 5%)
 PRE_S, POST_S = 0.35, 0.60   # median-beat window around R
 MIN_CLEAN_BEATS = 5          # beats with no different-shape neighbour needed to measure P and T
-HR_TOLERANCE = 8             # bpm; larger disagreement with the device = unreliable beat grouping
+QT_PLAUSIBLE_MS = (260, 600)  # outside this, the T wave was almost certainly misidentified
 
 
 @dataclass
@@ -43,16 +43,28 @@ class Fiducials:
 class Analysis:
     mv: np.ndarray                      # full recording, mV
     r_peaks: np.ndarray                 # all detected beats (sample index)
-    dominant: np.ndarray                # bool mask over r_peaks
+    dominant: np.ndarray                # bool mask over r_peaks: reference-shape beats
     template: np.ndarray | None         # median dominant beat, mV
     fid: Fiducials | None
-    rr_s: float | None                  # median RR between consecutive dominant beats
+    rr_s: float | None                  # median RR between consecutive reference beats (for QTc)
     intervals_ms: dict = field(default_factory=dict)   # PR, QRS, QT, QTcB, QTcF
     notes: list[str] = field(default_factory=list)     # why a measurement was skipped
 
+    @staticmethod
+    def _rate(beats: np.ndarray) -> float | None:
+        if len(beats) < 2 or beats[-1] == beats[0]:
+            return None
+        return (len(beats) - 1) * 60 * FS / (beats[-1] - beats[0])
+
     @property
     def heart_rate(self) -> float | None:
-        return 60 / self.rr_s if self.rr_s else None
+        """All detected beats per minute."""
+        return self._rate(self.r_peaks)
+
+    @property
+    def reference_rate(self) -> float | None:
+        """Reference-shape beats per minute."""
+        return self._rate(self.r_peaks[self.dominant])
 
     @property
     def n_other(self) -> int:
@@ -63,29 +75,90 @@ def to_mv(raw_counts) -> np.ndarray:
     return (np.asarray(raw_counts, float) - 8192) / COUNTS_PER_MV
 
 
-def detect_beats(clean: np.ndarray) -> np.ndarray:
-    # Energy-based detector finds beats of either polarity; snap each detection to the
-    # largest deflection within +-60 ms.
-    r = np.asarray(nk.ecg_peaks(clean, sampling_rate=FS, method="elgendi2010")[1]["ECG_R_Peaks"])
+def detect_beats(mv: np.ndarray, clean: np.ndarray) -> np.ndarray:
+    """Beat locations: NeuroKit2's energy-based detector (finds either polarity), each
+    detection moved to the largest raw deflection within +-150 ms, since detections of
+    wide beats often land on their trailing upswing. Detections < 200 ms apart merge."""
+    r0 = np.asarray(nk.ecg_peaks(clean, sampling_rate=FS, method="elgendi2010")[1]["ECG_R_Peaks"])
+    w = int(0.15 * FS)
+    ks = sorted({max(p - w, 0) + int(np.argmax(np.abs(mv[max(p - w, 0):p + w]))) for p in r0})
+    out: list[int] = []
+    for k in ks:
+        if out and k - out[-1] < int(0.2 * FS):
+            if abs(mv[k]) > abs(mv[out[-1]]):
+                out[-1] = k
+        else:
+            out.append(k)
+    return np.array(out, dtype=int)
+
+
+def qrs_width_ms(mv: np.ndarray, k: int) -> float:
+    """Width of the main deflection at 30% of its peak."""
+    a = mv[k]
+    sign, th = (np.sign(a) or 1.0), 0.3 * abs(a)
+    lo = hi = k
+    while lo > 0 and mv[lo - 1] * sign > th:
+        lo -= 1
+    while hi < len(mv) - 1 and mv[hi + 1] * sign > th:
+        hi += 1
+    return (hi - lo + 1) * 1000 / FS
+
+
+def _similar(mv, k, ref_k, width, ref_width, w) -> bool:
+    if np.sign(mv[k]) != np.sign(mv[ref_k]):
+        return False
+    if not (0.5 <= abs(mv[k]) / abs(mv[ref_k]) <= 2.0):
+        return False
+    if not (1 / 1.5 <= width / ref_width <= 1.5):
+        return False
+    a, b = mv[k - w:k + w], mv[ref_k - w:ref_k + w]
+    if a.std() == 0 or b.std() == 0:
+        return True
+    return float(np.corrcoef(a, b)[0, 1]) >= 0.5
+
+
+def classify(mv: np.ndarray, r: np.ndarray) -> np.ndarray:
+    """Group beats by shape (polarity, amplitude within 2x, width within 1.5x, loose
+    correlation) and return a mask of the reference group: the narrowest group holding at
+    least 20% of beats. This describes shape only; it is not a clinical classification."""
     w = int(0.06 * FS)
-    r = np.array([max(p - w, 0) + int(np.argmax(np.abs(clean[max(p - w, 0):p + w]))) for p in r])
-    return np.unique(r)
+    ok = np.flatnonzero((r >= w) & (r < len(mv) - w))
+    ref = np.zeros(len(r), bool)
+    if len(ok) < 3:
+        ref[ok] = True
+        return ref
+    widths = {i: qrs_width_ms(mv, r[i]) for i in ok}
+    # seed groups from the largest deflections first so each group's exemplar is a clear beat
+    groups: list[list[int]] = []
+    for i in sorted(ok, key=lambda i: -abs(mv[r[i]])):
+        for g in groups:
+            if _similar(mv, r[i], r[g[0]], widths[i], widths[g[0]], w):
+                g.append(i)
+                break
+        else:
+            groups.append([i])
+    big = [g for g in groups if len(g) >= max(3, 0.2 * len(ok))] or [max(groups, key=len)]
+    best = min(big, key=lambda g: (np.median([widths[i] for i in g]), -len(g)))
+    ref[best] = True
+    return ref
 
 
-def classify(clean: np.ndarray, r: np.ndarray, thresh: float = 0.8) -> np.ndarray:
-    """Mask of beats belonging to the largest group of mutually similar QRS shapes."""
-    w = int(0.1 * FS)
-    ok = (r >= w) & (r < len(clean) - w)
-    seg = np.array([clean[p - w:p + w] for p in r[ok]])
-    dom = np.zeros(len(r), bool)
-    if len(seg) < 3:
-        dom[ok] = True
-        return dom
-    with np.errstate(invalid="ignore"):
-        c = np.nan_to_num(np.corrcoef(seg))
-    seed = int(np.argmax((c > thresh).sum(1)))
-    dom[np.flatnonzero(ok)] = c[seed] > thresh
-    return dom
+def _drop_t_wave_detections(mv, r, ref):
+    """Remove non-reference detections with the reference beats' polarity, under 45% of their
+    height, within 450 ms after a reference beat: almost always a T wave, not a beat.
+    (Opposite-polarity deflections are kept; they are usually real wide beats.)"""
+    if ref.sum() < 3:
+        return r, ref
+    ref_amp = np.median(np.abs(mv[r[ref]]))
+    ref_sign = np.sign(np.median(mv[r[ref]]))
+    keep = np.ones(len(r), bool)
+    ref_pos = r[ref]
+    for i in np.flatnonzero(~ref):
+        prev = ref_pos[ref_pos < r[i]]
+        if (len(prev) and r[i] - prev[-1] <= int(0.45 * FS) and np.sign(mv[r[i]]) == ref_sign
+                and abs(mv[r[i]]) < 0.45 * ref_amp):
+            keep[i] = False
+    return r[keep], ref[keep]
 
 
 def _qrs_bounds(s: np.ndarray, r: int) -> tuple[int, int]:
@@ -106,17 +179,19 @@ def _t_wave(s: np.ndarray, qrs_off: int, rr: int) -> tuple[int | None, int | Non
     stop = min(qrs_off + int(0.5 * FS), qrs_off + int(0.75 * rr), len(s) - 2)
     if stop - start < 5:
         return None, None
-    seg = s[start:stop]
+    k = int(0.04 * FS)
+    sm = np.convolve(s, np.ones(k) / k, mode="same")
+    seg = sm[start:stop]
     tp = start + int(np.argmax(np.abs(seg)))
-    amp = s[tp]
+    amp = sm[tp]
     if abs(amp) < 0.15 * np.max(np.abs(s)):
         return None, None
-    # tangent method on the trailing limb
-    slope = np.diff(s[tp:stop + 1]) * np.sign(amp)
+    # tangent method on the trailing limb (of the smoothed wave)
+    slope = np.diff(sm[tp:stop + 1]) * np.sign(amp)
     if len(slope) < 2 or slope.min() >= 0:
         return tp, None
     k = int(np.argmin(slope))
-    x0, y0, m = tp + k, s[tp + k], s[tp + k + 1] - s[tp + k]
+    x0, y0, m = tp + k, sm[tp + k], sm[tp + k + 1] - sm[tp + k]
     t_end = int(round(x0 - y0 / m)) if m else None
     if t_end is None or not (tp < t_end < len(s)):
         return tp, None
@@ -137,17 +212,16 @@ def _p_wave(s: np.ndarray, qrs_on: int, noise: float) -> tuple[int | None, int |
     return pk, on
 
 
-def analyze(raw_counts, device_hr: int | None = None) -> Analysis:
-    """device_hr, when given, is used as a cross-check: if our beat detection disagrees
-    with the device by more than HR_TOLERANCE bpm, intervals are withheld."""
+def analyze(raw_counts) -> Analysis:
     mv = to_mv(raw_counts)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         clean = nk.ecg_clean(mv, sampling_rate=FS)
-    r = detect_beats(clean)
+    r = detect_beats(mv, clean)
     if len(r) < 3:
         return Analysis(mv, r, np.ones(len(r), bool), None, None, None)
-    dom = classify(clean, r)
+    dom = classify(mv, r)
+    r, dom = _drop_t_wave_detections(mv, r, dom)
     pre, post = int(PRE_S * FS), int(POST_S * FS)
     rd = r[dom]
     rd_ok = rd[(rd >= pre) & (rd < len(mv) - post)]
@@ -159,10 +233,8 @@ def analyze(raw_counts, device_hr: int | None = None) -> Analysis:
 
     # P and T are only measurable on beats with no different-shape beat nearby; otherwise
     # the median beat mixes in the neighbouring complex.
-    # Detections of wide beats often land on their trailing upswing, so re-centre them on
-    # the largest raw deflection nearby and allow for their width.
-    w, margin = int(0.15 * FS), int(0.1 * FS)
-    others = np.array([max(p - w, 0) + int(np.argmax(np.abs(mv[max(p - w, 0):p + w]))) for p in r[~dom]])
+    margin = int(0.1 * FS)   # allow for the width of a neighbouring wide beat
+    others = r[~dom]
     isolated = np.array([not np.any((others > p - pre - margin) & (others < p + post + margin))
                          for p in rd_ok])
     notes = []
@@ -183,14 +255,12 @@ def analyze(raw_counts, device_hr: int | None = None) -> Analysis:
     if measure_pt:
         tp, te = _t_wave(s, off, int(rr_s * FS) if rr_s else int(0.8 * FS))
         pp, pon = _p_wave(s, on, noise)
-        if te is None:
+        if te is not None and not (QT_PLAUSIBLE_MS[0] <= (te - on) * 1000 / FS <= QT_PLAUSIBLE_MS[1]):
+            tp = te = None
+            notes.append("QT not measured: T wave ambiguous")
+        elif te is None:
             notes.append("QT not measured: T wave end not identifiable")
     fid = Fiducials(pre, on, off, tp, te, pp, pon)
-
-    if device_hr and rr_s and abs(60 / rr_s - device_hr) > HR_TOLERANCE:
-        notes = ["Intervals withheld: beat classification uncertain (heart rate disagrees "
-                 "with the device)"]
-        return Analysis(mv, r, dom, tpl, Fiducials(pre, on, off), rr_s, {}, notes)
 
     ms = lambda a, b: (b - a) * 1000 / FS  # noqa: E731
     iv = {"QRS": ms(on, off)}
