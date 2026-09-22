@@ -30,6 +30,25 @@ SAMPLES_PER_PACKET = 25
 DATA_OFFSET = 11              # first sample byte in a d0 packet
 
 
+# The device's own screening findings, stored as up to two codes per recording (header
+# bytes 16-17). Labels from the Contec app's Feature.plist.
+DEVICE_FINDINGS = {
+    0: "No abnormal", 1: "Missed Beat", 2: "Accidental VPB", 3: "VPB Trigeminy",
+    4: "VPB Bigeminy", 5: "VPB Couple", 6: "VPB runs of 3", 7: "VPB runs of 4",
+    8: "VPB RonT", 9: "Bradycardia", 10: "Tachycardia", 11: "Arrhythmia",
+    12: "ST Elevation", 13: "ST Depression",
+}
+
+
+def finding_labels(codes: tuple[int, int]) -> list[str]:
+    """Device finding labels for a recording's result codes (0 in the second slot = none)."""
+    first, second = codes
+    labels = [DEVICE_FINDINGS.get(first, f"Unknown code {first}")]
+    if second:
+        labels.append(DEVICE_FINDINGS.get(second, f"Unknown code {second}"))
+    return labels
+
+
 class EMG10Error(RuntimeError):
     pass
 

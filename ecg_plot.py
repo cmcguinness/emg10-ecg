@@ -10,7 +10,8 @@ import numpy as np  # noqa: E402
 import textwrap  # noqa: E402
 
 from ecg_analysis import FS, Analysis  # noqa: E402
-from ecg_explain import explain, typical  # noqa: E402
+from ecg_explain import explain, typical, variation_label  # noqa: E402
+from emg10 import finding_labels  # noqa: E402
 
 MM = 1 / 25.4                 # inches per mm
 PAPER_SPEED = 25              # mm/s for the rhythm strips
@@ -85,8 +86,8 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
 
     margin, header, gap = 12, 22, 6
     fig_w = strip_w + 2 * margin
-    summary_h = (12 + len(a.notes)) * 5 + 16     # summary lines + disclaimer, mm
-    expl = [(h, textwrap.wrap(t, 145)) for h, t in explain(a, device_hr)]
+    summary_h = (13 + len(a.notes)) * 5 + 16     # summary lines + disclaimer, mm
+    expl = [(h, textwrap.wrap(t, 145)) for h, t in explain(a, device_hr, result_codes)]
     expl_h = 10 + sum(len(lines) * LINE_MM + 1.5 for _, lines in expl)
     fig_h = header + n_strips * (strip_h + gap) + max(beat_h, summary_h) + gap + expl_h + margin
     fig = plt.figure(figsize=(fig_w * MM, fig_h * MM), dpi=150)
@@ -175,8 +176,12 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
     if a.busy:
         lines.append(("Check sections", ", ".join(f"{b0:.0f}-{b1:.0f} s" for b0, b1 in a.busy)
                       + " (shaded: high activity)"))
+    if a.rr_cv is not None:
+        lines.insert(3, ("Rhythm variation", f"{a.rr_cv:.1f}% ({variation_label(a.rr_cv)})"
+                         + (f", RMSSD {a.rr_rmssd_ms:.0f} ms" if a.rr_rmssd_ms is not None else "")))
     if result_codes:
-        lines.append(("Device result codes", f"{result_codes[0]}, {result_codes[1]}"))
+        lines.append(("Device finding", " + ".join(finding_labels(result_codes))
+                      + f"   (codes {result_codes[0]}, {result_codes[1]})"))
     for n in a.notes:
         lines.append(("Note", n))
     sx = (margin + beat_w + 10) / fig_w
@@ -192,8 +197,8 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
         if label in typ_key and typ_key[label] in typ:
             fig.text(sx + 80 / fig_w, yy, typ[typ_key[label]], fontsize=7, color="0.45", va="center")
     fig.text(sx, 1 - (by + 8 + len(lines) * 5) / fig_h,
-             "Automated estimates from a single-lead handheld device; not a diagnosis.\n"
-             "Amplitude: 500 counts/mV, calibrated against the Contec app display.",
+             "Consumer handheld device + unvalidated software: estimates only, not a diagnosis.\n"
+             "See 'Accuracy' below. Amplitude: 500 counts/mV (calibrated against the Contec app).",
              fontsize=6, color="0.45", va="top", style="italic")
 
     # plain-language explanations, full width

@@ -51,6 +51,8 @@ class Analysis:
     notes: list[str] = field(default_factory=list)     # why a measurement was skipped
     one_off: np.ndarray | None = None   # bool mask over r_peaks: other-shape beats whose shape occurs once
     busy: list[tuple[float, float]] = field(default_factory=list)  # high-activity windows, seconds
+    rr_cv: float | None = None          # coefficient of variation of consecutive main-beat RR, %
+    rr_rmssd_ms: float | None = None    # RMS of successive RR differences (main beats), ms
 
     @staticmethod
     def _rate(beats: np.ndarray) -> float | None:
@@ -183,6 +185,22 @@ BUSY_WINDOW_S = 2.0
 BUSY_THRESHOLD = 0.045   # ~99th percentile of between-beat activity across the downloaded recordings
 
 
+def rhythm_variation(r: np.ndarray, ref: np.ndarray) -> tuple[float | None, float | None]:
+    """Beat-to-beat variation of the main rhythm, using only runs of consecutive reference
+    beats so other-shape beats do not inflate it. Returns (CV %, RMSSD ms)."""
+    rr, diffs = [], []
+    for i in range(len(r) - 1):
+        if ref[i] and ref[i + 1]:
+            rr.append((r[i + 1] - r[i]) * 1000 / FS)
+            if i + 2 < len(r) and ref[i + 2]:
+                diffs.append((r[i + 2] - r[i + 1] - (r[i + 1] - r[i])) * 1000 / FS)
+    if len(rr) < 5:
+        return None, None
+    cv = float(np.std(rr) / np.mean(rr) * 100)
+    rmssd = float(np.sqrt(np.mean(np.square(diffs)))) if len(diffs) >= 4 else None
+    return cv, rmssd
+
+
 def busy_windows(mv: np.ndarray, r: np.ndarray, ref: np.ndarray) -> list[tuple[float, float]]:
     """Windows with unusually high between-beat activity: mean |sample-to-sample change|
     outside the QRS complexes, relative to the reference beats' height. Could be noise or
@@ -276,8 +294,10 @@ def analyze(raw_counts) -> Analysis:
     # RR only between consecutive beats that are both dominant
     rr = [b - a for a, b, da, db in zip(r, r[1:], dom, dom[1:]) if da and db]
     rr_s = float(np.median(rr)) / FS if rr else None
+    rr_cv, rr_rmssd = rhythm_variation(r, dom)
     if len(rd_ok) < 3:
-        return Analysis(mv, r, dom, None, None, rr_s, one_off=one_off, busy=busy)
+        return Analysis(mv, r, dom, None, None, rr_s, one_off=one_off, busy=busy, rr_cv=rr_cv,
+                        rr_rmssd_ms=rr_rmssd)
 
     # P and T are only measurable on beats with no different-shape beat nearby; otherwise
     # the median beat mixes in the neighbouring complex.
@@ -319,4 +339,4 @@ def analyze(raw_counts) -> Analysis:
         if rr_s:
             iv["QTcB"] = iv["QT"] / np.sqrt(rr_s)
             iv["QTcF"] = iv["QT"] / np.cbrt(rr_s)
-    return Analysis(mv, r, dom, tpl, fid, rr_s, iv, notes, one_off, busy)
+    return Analysis(mv, r, dom, tpl, fid, rr_s, iv, notes, one_off, busy, rr_cv, rr_rmssd)

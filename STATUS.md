@@ -17,6 +17,8 @@ software, and render readable, labelled plots.
 - [x] Amplitude calibrated (500 counts/mV)
 - [x] Plain-language "What these measurements mean" section on each PNG (`ecg_explain.py`): what each
       measure is, typical adult range, and where this recording falls. No range judgement on HR when many beats differ in shape.
+- [x] Device findings decoded and shown on reports (code table from the Contec app's Feature.plist; `emg10.DEVICE_FINDINGS`)
+- [x] Rhythm variation (CV %, RMSSD) of consecutive main beats; accuracy disclaimer on reports + README
 - [x] Noise handling, flag-don't-exclude: 2 s windows with high between-beat activity are shaded 'check'
       (can be noise or a run of unusual beats, so never excluded); one-off shapes are grey. Hard dropouts are rare.
 
@@ -41,7 +43,11 @@ software, and render readable, labelled plots.
   - QT is skipped when fewer than 5 reference beats are free of other-shape neighbours, or when it
     falls outside 260-600 ms (T wave misidentified). PR is rarely measurable (noise gate).
   - Remaining weak spot: noisy recordings with ambiguous small complexes
-- Device result codes (header bytes 16–17): the Contec app labels code 1 "Missed Beat".
-  The other codes are unmapped. A table could be built by comparing more recordings in the app.
+- Device result codes (header bytes 16-17) are decoded: 0 No abnormal ... 11 Arrhythmia, 12/13 ST changes.
+  The device has **no atrial fibrillation category**, and we don't attempt AF detection: P waves are lost to the
+  noise gate and other-shape beats confound RR irregularity.
+- Raw/unfiltered data: not available over USB. The settings command (0x83) covers language/beep only (the
+  Contec app exposes no filter option). Filtering and the noise gate happen in firmware before storage;
+  the only route would be hardware (the MCU's debug port or tapping the analog front end). Not pursued.
 - `main.py` is an unused FastAPI stub from project creation
 - Personal recording metrics live in `STATUS.local.md` (gitignored)

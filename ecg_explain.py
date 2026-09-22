@@ -7,6 +7,7 @@ recording can over- or under-estimate every one of them.
 from __future__ import annotations
 
 from ecg_analysis import Analysis
+from emg10 import finding_labels
 
 # (low, high) typical adult resting ranges
 HR_RANGE = (60, 100)        # bpm
@@ -16,6 +17,37 @@ QRS_MAX = 120               # ms; under this is considered normal
 QTC_RANGE = (350, 450)      # ms (Bazett); up to ~460 is often used for women, >500 is markedly long
 
 CONFIRM = "A single handheld reading can be off; worth confirming on a clinical ECG."
+
+# Plain-language meaning of the device's own findings (see emg10.DEVICE_FINDINGS)
+FINDING_TEXT = {
+    "No abnormal": "the device's screening found nothing it flags",
+    "Missed Beat": "an unexpectedly long gap where a beat would normally occur",
+    "Accidental VPB": "an occasional ventricular premature beat (VPB): an early beat starting in the lower chambers",
+    "VPB Trigeminy": "a ventricular premature beat on every third beat",
+    "VPB Bigeminy": "a ventricular premature beat alternating with every normal beat",
+    "VPB Couple": "two ventricular premature beats in a row",
+    "VPB runs of 3": "three ventricular premature beats in a row",
+    "VPB runs of 4": "four ventricular premature beats in a row",
+    "VPB RonT": "a premature beat landing on the T wave of the previous beat",
+    "Bradycardia": "a slow heart rate (usually under 60 bpm)",
+    "Tachycardia": "a fast heart rate (usually over 100 bpm)",
+    "Arrhythmia": "an irregular rhythm; a general flag that includes common benign irregularity",
+    "ST Elevation": "the segment after the QRS sits above baseline",
+    "ST Depression": "the segment after the QRS sits below baseline",
+}
+
+ACCURACY = (
+    "This is a consumer single-lead handheld ECG. The device filters the signal to 1-20 Hz (diagnostic "
+    "ECGs record roughly 0.05-150 Hz), suppresses small signals, and hand contact adds noise, all of which "
+    "distort wave shapes and interval measurements (QRS tends to read short; P waves are usually lost). The "
+    "device's findings come from its own automated screening and can include false alarms and misses; it "
+    "has no atrial fibrillation detection. The measurements in this report come from software that has not "
+    "been clinically validated. This is not a medical device or a diagnosis: discuss results with a "
+    "clinician, and seek urgent care for symptoms such as chest pain, fainting or severe breathlessness.")
+
+
+def variation_label(cv: float) -> str:
+    return "steady" if cv < 5 else ("some variation" if cv < 10 else "marked variation")
 
 
 def qt_range_for(rr_s: float) -> tuple[float, float]:
@@ -41,7 +73,8 @@ def _where(v: float, lo: float | None, hi: float | None) -> str:
     return "within the typical range."
 
 
-def explain(a: Analysis, device_hr: int | None = None) -> list[tuple[str, str]]:
+def explain(a: Analysis, device_hr: int | None = None,
+            result_codes: tuple[int, int] | None = None) -> list[tuple[str, str]]:
     iv = a.intervals_ms
     out: list[tuple[str, str]] = []
 
@@ -65,6 +98,24 @@ def explain(a: Analysis, device_hr: int | None = None) -> list[tuple[str, str]]:
                 txt += ", between the two, so it evidently counts only some of the other-shape beats"
             txt += "."
         out.append(("Heart rate", txt))
+
+    if result_codes:
+        labels = finding_labels(result_codes)
+        parts = [f"{lab}: {FINDING_TEXT.get(lab, 'no description available')}" for lab in labels]
+        out.append(("Device's finding",
+                    "The device runs its own automated screening on each recording. It reported "
+                    + "; ".join(parts) + ". This is the device's label, not a diagnosis."))
+
+    if a.rr_cv is not None:
+        txt = (f"How much the spacing between consecutive main beats varies (other-shape beats are left out). "
+               f"Here: {a.rr_cv:.1f}% variation ({variation_label(a.rr_cv)})")
+        if a.rr_rmssd_ms is not None:
+            txt += f", RMSSD {a.rr_rmssd_ms:.0f} ms"
+        txt += (". Some variation is normal: the rate rises and falls with breathing, and resting RMSSD in "
+                "healthy adults is often around 20-60 ms, lower with age. Under 5% is steady, 5-10% moderate, "
+                "over 10% marked. Irregular spacing can come from breathing, premature beats, or rhythm "
+                "disturbances, or from missed beat detections in a noisy recording, so this is descriptive only.")
+        out.append(("Rhythm variation", txt))
 
     if a.rr_s:
         out.append(("RR interval",
@@ -140,7 +191,7 @@ def explain(a: Analysis, device_hr: int | None = None) -> list[tuple[str, str]]:
                     f"{spans}: unusually high activity between beats (shaded). This can be noise or poor "
                     f"contact, or a run of unusual beats. Nothing was excluded; look at the trace there."))
 
-    out.append(("About these numbers",
-                "Automated estimates from a single lead-I recording, 30 s, filtered by the device to 1-20 Hz. "
-                "Not a diagnosis. Reference ranges are typical adult resting values."))
+    out.append(("Accuracy", ACCURACY))
+    out.append(("About the ranges", "Typical adult resting values from general clinical references; "
+                "individual normal values vary with age, sex, fitness and medication."))
     return out
