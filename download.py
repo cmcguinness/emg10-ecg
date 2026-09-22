@@ -6,14 +6,17 @@ Usage:
   python download.py --record 1 3    # download specific recordings (1 = newest)
   python download.py --out DIR       # output directory (default: recordings/)
   python download.py --replot        # regenerate PNGs from saved CSVs (no device needed)
+  python download.py --accept-disclaimer   # accept DISCLAIMER.md non-interactively (asked once)
 """
 import argparse
 import csv
 import sys
 from pathlib import Path
 
+from acknowledge import require_acknowledgement
 from ecg_analysis import analyze
 from ecg_plot import render
+from environment import summary as env_summary
 from emg10 import (BASELINE, EMG10, SAMPLE_RATE_HZ, EMG10Error, RecordingInfo, finding_labels,
                    parse_header)
 
@@ -55,11 +58,11 @@ def write_index(out: Path, infos: list[RecordingInfo]):
     with (out / "index.csv").open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["index", "recorded_at", "heart_rate", "duration_s", "result_codes",
-                    "file_stem", "raw_header"])
+                    "file_stem", "raw_header", "software"])
         for i in infos:
             w.writerow([i.index, i.recorded_at.isoformat() if i.recorded_at else "",
                         i.heart_rate, i.duration_s, f"{i.result_codes[0]},{i.result_codes[1]}",
-                        stem(i), i.raw_header.hex(" ")])
+                        stem(i), i.raw_header.hex(" "), env_summary()])
 
 
 def main():
@@ -69,7 +72,10 @@ def main():
     ap.add_argument("--out", type=Path, default=Path("recordings"))
     ap.add_argument("--force", action="store_true", help="re-download files that already exist")
     ap.add_argument("--replot", action="store_true", help="regenerate PNGs from saved CSVs; no device")
+    ap.add_argument("--accept-disclaimer", action="store_true",
+                    help="record acceptance of DISCLAIMER.md without the interactive prompt")
     args = ap.parse_args()
+    require_acknowledgement(args.accept_disclaimer)
     print("NOTE: not a medical device. Output is informational only and not a diagnosis; "
           "see DISCLAIMER.md.", file=sys.stderr)
     if args.replot:

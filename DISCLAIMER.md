@@ -3,6 +3,11 @@
 **This software is not a medical device, does not provide medical advice, and must not be used to
 make healthcare decisions.**
 
+**Intended use.** This is educational and research software that lets technically skilled users
+inspect data from their own EMAY EMG-10 / Contec PM10. It is not intended for diagnosis, treatment,
+monitoring, screening, or any other clinical or medical use, by anyone, including healthcare
+professionals.
+
 - **Not a medical device.** It has not been reviewed, cleared or approved by the FDA or any other
   regulator, and it has not been clinically validated. It is not intended to diagnose, treat, cure,
   monitor or prevent any disease or condition.
@@ -26,6 +31,20 @@ make healthcare decisions.**
   contributors accept no liability for any injury, loss, damage or harm, direct or indirect, arising
   from its use or from reliance on its output. See also the warranty disclaimer and limitation of
   liability in [LICENSE](LICENSE).
+- **Source code for technically skilled users.** This project is distributed only as source code,
+  free of charge and outside any commercial activity, with no packaged application, installer or
+  support. Running it requires installing and executing the code yourself. You are responsible for
+  reviewing the code and its documented methods and limitations, and for deciding whether it is
+  suitable for any purpose.
+- **Your environment, your responsibility.** You are responsible for setting up and maintaining a
+  hardware and software environment capable of running this code: the computer, operating system,
+  USB connection (ports, hubs and cables), the device and its firmware, the Python version, and the
+  versions of every library it depends on (such as NeuroKit2, NumPy, SciPy, Matplotlib and hidapi).
+  The author has run it only with the library versions pinned in `requirements.txt`, and no
+  environment is supported or guaranteed. Differences between environments, including library
+  updates, can change beat detection, measurements, plots and device findings as displayed, or
+  cause transfer errors or incomplete data, and results may not be reproducible across
+  environments. Each report and `index.csv` records the software versions that produced it.
 - **Your device, your responsibility.** The software communicates with the device using a
   reverse-engineered protocol. It sends only commands observed from the vendor's own software, but
   it comes with no guarantee of compatibility and no protection against device malfunction or data loss.

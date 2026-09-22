@@ -8,6 +8,10 @@ computer over an undocumented USB HID protocol. This project decodes that protoc
 recording to CSV, and renders each one as an ECG-paper report with interval measurements and
 plain-language explanations.
 
+**Intended use:** educational and research software that lets technically skilled users inspect data
+from their own device. It is not intended for diagnosis, treatment, monitoring, or any other clinical
+or medical use. See [DISCLAIMER.md](DISCLAIMER.md).
+
 The device's user manual (as the Contec PM10) is available on
 [ManualsLib](https://www.manualslib.com/guide/2991328/contec-pm10-portable-ecg-monitor-manual.html).
 
@@ -32,13 +36,22 @@ The device's user manual (as the Contec PM10) is available on
 
 ## Quick start
 
-Requires Python 3.11+ and macOS, Linux or Windows with USB HID access.
+This project is provided as **source code for technically skilled users**, with no packaged app,
+installer or support. You are responsible for reading the code and deciding whether it is suitable for
+your purpose, and for setting up a hardware and software environment that can run it. Differences in
+operating system, Python and library versions, or USB hardware can affect results; install the tested
+versions pinned in `requirements.txt`, and note that each report records the versions that produced it. The methods and
+their known limitations are documented in the module docstrings and in [Limitations](#limitations). Requires Python 3.11+ and macOS, Linux or Windows with USB HID access.
 
 ```bash
 pip install -r requirements.txt
 
 python download.py            # turn the EMG-10 on and plug in USB when prompted
 ```
+
+On first run you'll be shown [DISCLAIMER.md](DISCLAIMER.md) and asked to type `I UNDERSTAND` (or pass
+`--accept-disclaimer` in scripts). Acceptance is stored per user in `~/.config/emg10-ecg/` and is
+asked for again if the disclaimer changes.
 
 Recordings are saved to `recordings/` as `YYYYmmdd_HHMMSS_hrNN.csv` (raw samples) and a matching `.png`
 report, plus an `index.csv` of every recording's header.
@@ -50,6 +63,7 @@ report, plus an `index.csv` of every recording's header.
 | `python download.py --record 1 3` | Download specific recordings (1 = newest) |
 | `python download.py --replot` | Regenerate all PNGs from saved CSVs; no device needed |
 | `python download.py --out DIR` | Save somewhere other than `recordings/` |
+| `python download.py --accept-disclaimer` | Record acceptance of the disclaimer without the interactive prompt |
 
 > The EMG-10 switches itself off after about 30 seconds of idle and after a few minutes even while
 > transferring. If that happens the downloader waits; wake the device and it carries on.
@@ -80,6 +94,8 @@ Data bytes are 7-bit; multi-byte values are big-endian groups of 7 bits. Samples
 | `ecg_analysis.py` | Beat detection (NeuroKit2), shape grouping, median beat, intervals |
 | `ecg_plot.py` | ECG-paper report rendering |
 | `ecg_explain.py` | Plain-language explanations and typical ranges |
+| `environment.py` | Records the software versions behind each report and `index.csv` row |
+| `acknowledge.py` | One-time disclaimer acceptance (stored per user, re-asked if the disclaimer changes) |
 | `tools/` | HID capture/probe utilities from the reverse engineering, and the example generator |
 
 ## Limitations
@@ -98,7 +114,7 @@ can include false alarms and misses. The measurements this software adds are aut
 that have not been clinically validated. Discuss any results with a clinician, and seek urgent care
 for symptoms such as chest pain, fainting or severe breathlessness.
 
-Not affiliated with EMAY or Contec.
+This is a non-commercial hobby project, provided as-is with no support. Not affiliated with EMAY or Contec.
 
 ## License
 

@@ -1,5 +1,10 @@
-hidapi>=0.14
-numpy
-matplotlib
-neurokit2>=0.2.13
-scipy
+# Tested versions (Python 3.13). Other versions may produce different results; see DISCLAIMER.md.
+hidapi==0.15.0
+numpy==2.5.3
+matplotlib==3.11.2
+neurokit2==0.2.13
+scipy==1.18.1
+# used internally by neurokit2; pinned because they can affect its results
+pandas==2.3.3
+scikit-learn==1.9.1
+PyWavelets==1.10.0
