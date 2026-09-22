@@ -21,7 +21,7 @@ import neurokit2 as nk
 import numpy as np
 
 FS = 250
-COUNTS_PER_MV = 500    # calibrated against the Contec app drawn at 10 mm/mV (R and S waves agree within 5%)
+COUNTS_PER_MV = 500    # calibrated against the Contec app display at 10 mm/mV (R and S waves agree within 5%)
 PRE_S, POST_S = 0.35, 0.60   # median-beat window around R
 MIN_CLEAN_BEATS = 5          # beats with no different-shape neighbour needed to measure P and T
 QT_PLAUSIBLE_MS = (260, 600)  # outside this, the T wave was almost certainly misidentified

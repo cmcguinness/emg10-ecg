@@ -3,3 +3,5 @@
 __pycache__/
 # Personal health data - never commit
 recordings/
+STATUS.local.md
+.claude-profile
