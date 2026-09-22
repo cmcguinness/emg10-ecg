@@ -49,6 +49,8 @@ class Analysis:
     rr_s: float | None                  # median RR between consecutive reference beats (for QTc)
     intervals_ms: dict = field(default_factory=dict)   # PR, QRS, QT, QTcB, QTcF
     notes: list[str] = field(default_factory=list)     # why a measurement was skipped
+    one_off: np.ndarray | None = None   # bool mask over r_peaks: other-shape beats whose shape occurs once
+    busy: list[tuple[float, float]] = field(default_factory=list)  # high-activity windows, seconds
 
     @staticmethod
     def _rate(beats: np.ndarray) -> float | None:
@@ -58,8 +60,9 @@ class Analysis:
 
     @property
     def heart_rate(self) -> float | None:
-        """All detected beats per minute."""
-        return self._rate(self.r_peaks)
+        """Beats per minute, counting reference and recurring other-shape beats. One-off
+        shapes are left out: from a single example they may be artifacts."""
+        return self._rate(self.r_peaks[~self.one_off_mask])
 
     @property
     def reference_rate(self) -> float | None:
@@ -67,8 +70,18 @@ class Analysis:
         return self._rate(self.r_peaks[self.dominant])
 
     @property
+    def one_off_mask(self) -> np.ndarray:
+        return self.one_off if self.one_off is not None else np.zeros(len(self.r_peaks), bool)
+
+    @property
     def n_other(self) -> int:
-        return int((~self.dominant).sum())
+        """Other-shape beats whose shape recurs (orange)."""
+        return int((~self.dominant & ~self.one_off_mask).sum())
+
+    @property
+    def n_one_off(self) -> int:
+        """Other-shape beats whose shape occurs only once (grey)."""
+        return int(self.one_off_mask.sum())
 
 
 def to_mv(raw_counts) -> np.ndarray:
@@ -117,16 +130,18 @@ def _similar(mv, k, ref_k, width, ref_width, w) -> bool:
     return float(np.corrcoef(a, b)[0, 1]) >= 0.5
 
 
-def classify(mv: np.ndarray, r: np.ndarray) -> np.ndarray:
+def classify(mv: np.ndarray, r: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Group beats by shape (polarity, amplitude within 2x, width within 1.5x, loose
     correlation) and return a mask of the reference group: the narrowest group holding at
-    least 20% of beats. This describes shape only; it is not a clinical classification."""
+    least 20% of beats. Also returns a mask of beats whose shape occurs only once.
+    This describes shape only; it is not a clinical classification."""
     w = int(0.06 * FS)
     ok = np.flatnonzero((r >= w) & (r < len(mv) - w))
     ref = np.zeros(len(r), bool)
+    one_off = np.zeros(len(r), bool)
     if len(ok) < 3:
         ref[ok] = True
-        return ref
+        return ref, one_off
     widths = {i: qrs_width_ms(mv, r[i]) for i in ok}
     # seed groups from the largest deflections first so each group's exemplar is a clear beat
     groups: list[list[int]] = []
@@ -140,15 +155,18 @@ def classify(mv: np.ndarray, r: np.ndarray) -> np.ndarray:
     big = [g for g in groups if len(g) >= max(3, 0.2 * len(ok))] or [max(groups, key=len)]
     best = min(big, key=lambda g: (np.median([widths[i] for i in g]), -len(g)))
     ref[best] = True
-    return ref
+    for g in groups:
+        if len(g) == 1 and g is not best:
+            one_off[g[0]] = True
+    return ref, one_off
 
 
-def _drop_t_wave_detections(mv, r, ref):
+def _drop_t_wave_detections(mv, r, ref, one_off):
     """Remove non-reference detections with the reference beats' polarity, under 45% of their
     height, within 450 ms after a reference beat: almost always a T wave, not a beat.
     (Opposite-polarity deflections are kept; they are usually real wide beats.)"""
     if ref.sum() < 3:
-        return r, ref
+        return r, ref, one_off
     ref_amp = np.median(np.abs(mv[r[ref]]))
     ref_sign = np.sign(np.median(mv[r[ref]]))
     keep = np.ones(len(r), bool)
@@ -158,7 +176,36 @@ def _drop_t_wave_detections(mv, r, ref):
         if (len(prev) and r[i] - prev[-1] <= int(0.45 * FS) and np.sign(mv[r[i]]) == ref_sign
                 and abs(mv[r[i]]) < 0.45 * ref_amp):
             keep[i] = False
-    return r[keep], ref[keep]
+    return r[keep], ref[keep], one_off[keep]
+
+
+BUSY_WINDOW_S = 2.0
+BUSY_THRESHOLD = 0.045   # ~99th percentile of between-beat activity across the downloaded recordings
+
+
+def busy_windows(mv: np.ndarray, r: np.ndarray, ref: np.ndarray) -> list[tuple[float, float]]:
+    """Windows with unusually high between-beat activity: mean |sample-to-sample change|
+    outside the QRS complexes, relative to the reference beats' height. Could be noise or
+    contact trouble, or a run of unusual beats, so they are flagged, never excluded."""
+    ref_amp = np.median(np.abs(mv[r[ref]])) if ref.any() else np.percentile(np.abs(mv), 99)
+    if ref_amp <= 0:
+        return []
+    mask = np.ones(len(mv), bool)
+    half = int(0.08 * FS)
+    for k in r:
+        mask[max(k - half, 0):k + half] = False
+    d = np.abs(np.diff(mv, prepend=mv[0]))
+    w = int(BUSY_WINDOW_S * FS)
+    out: list[tuple[float, float]] = []
+    for start in range(0, len(mv) - w + 1, w):
+        m = mask[start:start + w]
+        if m.sum() > 50 and d[start:start + w][m].mean() / ref_amp > BUSY_THRESHOLD:
+            a, b = start / FS, (start + w) / FS
+            if out and out[-1][1] == a:
+                out[-1] = (out[-1][0], b)
+            else:
+                out.append((a, b))
+    return out
 
 
 def _qrs_bounds(s: np.ndarray, r: int) -> tuple[int, int]:
@@ -220,8 +267,9 @@ def analyze(raw_counts) -> Analysis:
     r = detect_beats(mv, clean)
     if len(r) < 3:
         return Analysis(mv, r, np.ones(len(r), bool), None, None, None)
-    dom = classify(mv, r)
-    r, dom = _drop_t_wave_detections(mv, r, dom)
+    dom, one_off = classify(mv, r)
+    r, dom, one_off = _drop_t_wave_detections(mv, r, dom, one_off)
+    busy = busy_windows(mv, r, dom)
     pre, post = int(PRE_S * FS), int(POST_S * FS)
     rd = r[dom]
     rd_ok = rd[(rd >= pre) & (rd < len(mv) - post)]
@@ -229,7 +277,7 @@ def analyze(raw_counts) -> Analysis:
     rr = [b - a for a, b, da, db in zip(r, r[1:], dom, dom[1:]) if da and db]
     rr_s = float(np.median(rr)) / FS if rr else None
     if len(rd_ok) < 3:
-        return Analysis(mv, r, dom, None, None, rr_s)
+        return Analysis(mv, r, dom, None, None, rr_s, one_off=one_off, busy=busy)
 
     # P and T are only measurable on beats with no different-shape beat nearby; otherwise
     # the median beat mixes in the neighbouring complex.
@@ -271,4 +319,4 @@ def analyze(raw_counts) -> Analysis:
         if rr_s:
             iv["QTcB"] = iv["QT"] / np.sqrt(rr_s)
             iv["QTcF"] = iv["QT"] / np.cbrt(rr_s)
-    return Analysis(mv, r, dom, tpl, fid, rr_s, iv, notes)
+    return Analysis(mv, r, dom, tpl, fid, rr_s, iv, notes, one_off, busy)

@@ -17,6 +17,7 @@ PAPER_SPEED = 25              # mm/s for the rhythm strips
 BEAT_SPEED = 100              # mm/s for the enlarged median beat
 STRIP_S = 10
 MINOR, MAJOR, TRACE = "#f6c9c9", "#e58f8f", "#1a1a1a"
+REF_C, OTHER_C, ONE_OFF_C, BUSY_C = "#2060c0", "#d07000", "#8a8a8a", "#fff2b3"
 LINE_MM = 3.4                 # explanation text line height
 GAINS = (10, 20, 40, 80, 160)  # mm/mV; pick the smallest that makes R >= ~8 mm
 
@@ -84,7 +85,7 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
 
     margin, header, gap = 12, 22, 6
     fig_w = strip_w + 2 * margin
-    summary_h = (11 + len(a.notes)) * 5 + 16     # summary lines + disclaimer, mm
+    summary_h = (12 + len(a.notes)) * 5 + 16     # summary lines + disclaimer, mm
     expl = [(h, textwrap.wrap(t, 145)) for h, t in explain(a, device_hr)]
     expl_h = 10 + sum(len(lines) * LINE_MM + 1.5 for _, lines in expl)
     fig_h = header + n_strips * (strip_h + gap) + max(beat_h, summary_h) + gap + expl_h + margin
@@ -108,12 +109,18 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
         ax = axes_at(margin, header + i * (strip_h + gap), strip_w, strip_h)
         x0, x1 = i * STRIP_S, (i + 1) * STRIP_S
         _paper(ax, x0, x1, lo_mv, hi_mv, PAPER_SPEED, gain)
+        for b0, b1 in a.busy:
+            if b1 > x0 and b0 < x1:
+                ax.axvspan(max(b0, x0), min(b1, x1), color=BUSY_C, alpha=0.55, zorder=0.5, lw=0)
+                ax.text(max(b0, x0) + 0.05, lo_mv + 0.12 * (hi_mv - lo_mv), "check", fontsize=5.5,
+                        color="#8a6d00", style="italic")
         m = (t >= x0) & (t < x1)
         ax.plot(t[m], a.mv[m], color=TRACE, lw=0.6)
-        for p, d in zip(a.r_peaks, a.dominant):
+        for p, d, o in zip(a.r_peaks, a.dominant, a.one_off_mask):
             if x0 <= p / FS < x1:
-                ax.plot(p / FS, hi_mv - 0.07 * (hi_mv - lo_mv), marker="v" if d else "D", ms=2.5 if d else 3,
-                        color="#2060c0" if d else "#d07000", ls="none")
+                style = ("v", 2.5, REF_C) if d else (("o", 2.5, ONE_OFF_C) if o else ("D", 3, OTHER_C))
+                ax.plot(p / FS, hi_mv - 0.07 * (hi_mv - lo_mv), marker=style[0], ms=style[1],
+                        color=style[2], ls="none")
         ax.text(x0 + 0.05, lo_mv + 0.04 * (hi_mv - lo_mv), f"{x0}s", fontsize=6, color="0.35")
         if i == 0:
             _cal_pulse(ax, x0 + 0.1, lo_mv + 0.2 * (hi_mv - lo_mv), gain, _nice_cal(gain))
@@ -163,8 +170,11 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
         ("QTc Bazett", _fmt(iv.get("QTcB"))),
         ("QTc Fridericia", _fmt(iv.get("QTcF"))),
         ("Beats", f"{len(a.r_peaks)} detected: {int(a.dominant.sum())} reference (blue), "
-                  f"{a.n_other} other shape (orange)"),
+                  f"{a.n_other} other shape (orange), {a.n_one_off} one-off (grey)"),
     ]
+    if a.busy:
+        lines.append(("Check sections", ", ".join(f"{b0:.0f}-{b1:.0f} s" for b0, b1 in a.busy)
+                      + " (shaded: high activity)"))
     if result_codes:
         lines.append(("Device result codes", f"{result_codes[0]}, {result_codes[1]}"))
     for n in a.notes:

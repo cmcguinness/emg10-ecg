@@ -50,11 +50,11 @@ def explain(a: Analysis, device_hr: int | None = None) -> list[tuple[str, str]]:
     if hr and mixed and ref:
         txt = (f"Beats per minute. Typical resting range {HR_RANGE[0]}-{HR_RANGE[1]} bpm. Many beats in this "
                f"recording have a different shape, so the rate depends on which are counted: {hr:.0f} per "
-               f"minute counting every complex, {ref:.0f} per minute counting only the main shape. It isn't "
+               f"minute counting all recurring shapes, {ref:.0f} per minute counting only the main shape. It isn't "
                f"compared with the typical range for that reason.")
     elif hr:
         txt = (f"Beats per minute. Typical resting range {HR_RANGE[0]}-{HR_RANGE[1]} bpm. "
-               f"This recording: {hr:.0f} bpm counting every beat, {_where(hr, *HR_RANGE)}")
+               f"This recording: {hr:.0f} bpm, {_where(hr, *HR_RANGE)}")
         if a.n_other and ref and abs(ref - hr) >= 3:
             txt += f" Counting only the main (reference) beat shape: {ref:.0f} per minute."
     if hr:
@@ -125,9 +125,20 @@ def explain(a: Analysis, device_hr: int | None = None) -> list[tuple[str, str]]:
     if a.n_other:
         out.append(("Other-shape beats",
                     f"{a.n_other} of {len(a.r_peaks)} beats (orange) have a different shape from the main "
-                    f"beats (blue). Beats with a different shape can come from a different origin in the "
-                    f"heart, such as early (premature) beats, or can be movement or contact artifacts from "
-                    f"a hand-held recording. Shapes that repeat regularly are less likely to be artifacts."))
+                    f"beats (blue), and that shape recurs. Beats with a different shape can come from a "
+                    f"different origin in the heart, such as early (premature) beats; a shape that repeats "
+                    f"consistently is less likely to be a movement or contact artifact."))
+    if a.n_one_off:
+        out.append(("One-off shapes",
+                    f"{a.n_one_off} complex(es) (grey) have a shape seen only once in this recording. From a "
+                    f"single example there is no telling a lone early beat from a movement or contact "
+                    f"artifact, which is common when a device is held between two hands. They are not counted in "
+                    f"the heart rate."))
+    if a.busy:
+        spans = ", ".join(f"{b0:.0f}-{b1:.0f} s" for b0, b1 in a.busy)
+        out.append(("Check sections",
+                    f"{spans}: unusually high activity between beats (shaded). This can be noise or poor "
+                    f"contact, or a run of unusual beats. Nothing was excluded; look at the trace there."))
 
     out.append(("About these numbers",
                 "Automated estimates from a single lead-I recording, 30 s, filtered by the device to 1-20 Hz. "

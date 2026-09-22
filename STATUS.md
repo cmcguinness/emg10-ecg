@@ -17,7 +17,8 @@ software, and render readable, labelled plots.
 - [x] Amplitude calibrated (500 counts/mV)
 - [x] Plain-language "What these measurements mean" section on each PNG (`ecg_explain.py`): what each
       measure is, typical adult range, and where this recording falls. No range judgement on HR when many beats differ in shape.
-- [ ] Noise robustness: per-segment quality, grey 'possible artifact' for one-off odd complexes (proposed, not started)
+- [x] Noise handling, flag-don't-exclude: 2 s windows with high between-beat activity are shaded 'check'
+      (can be noise or a run of unusual beats, so never excluded); one-off shapes are grey. Hard dropouts are rare.
 
 ## Key facts
 - 250 Hz, 30 s = 7500 samples, 14-bit values sent as two 7-bit bytes; baseline 8192
@@ -33,8 +34,9 @@ software, and render readable, labelled plots.
   width (1.5x) and loose shape correlation, and the narrowest large group is the "reference" shape.
   Same-polarity small detections within 450 ms of a reference beat are dropped as T waves.
   The report shows both the all-beat rate and the reference-beat rate, next to the device's figure.
-  - Validation: on clean recordings (<= 2 other-shape beats) the all-beat rate matches the device's HR
-    within 3 bpm. On mixed recordings the device's HR usually falls between our two rates; its
+  - Heart rate counts reference + recurring other-shape beats; one-off shapes (seen once) are grey
+    and not counted. Validation: on clean recordings (<= 2 other-shape beats) it matches the device's HR
+    within 3 bpm on 94%. On mixed recordings the device's HR usually falls between our two rates; its
     counting rule is unknown, so it's not used as ground truth there.
   - QT is skipped when fewer than 5 reference beats are free of other-shape neighbours, or when it
     falls outside 260-600 ms (T wave misidentified). PR is rarely measurable (noise gate).
