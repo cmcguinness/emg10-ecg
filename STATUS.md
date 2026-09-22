@@ -15,6 +15,9 @@ software, and render readable, labelled plots.
       `python download.py --replot` regenerates them from the CSVs without the device
 - [x] Beat classification rebuilt (2026-09-22): raw-peak location, feature grouping, T-wave rejection
 - [x] Amplitude calibrated (500 counts/mV)
+- [x] Plain-language "What these measurements mean" section on each PNG (`ecg_explain.py`): what each
+      measure is, typical adult range, and where this recording falls. No range judgement on HR when many beats differ in shape.
+- [ ] Noise robustness: per-segment quality, grey 'possible artifact' for one-off odd complexes (proposed, not started)
 
 ## Key facts
 - 250 Hz, 30 s = 7500 samples, 14-bit values sent as two 7-bit bytes; baseline 8192

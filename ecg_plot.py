@@ -7,13 +7,17 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+import textwrap  # noqa: E402
+
 from ecg_analysis import FS, Analysis  # noqa: E402
+from ecg_explain import explain, typical  # noqa: E402
 
 MM = 1 / 25.4                 # inches per mm
 PAPER_SPEED = 25              # mm/s for the rhythm strips
 BEAT_SPEED = 100              # mm/s for the enlarged median beat
 STRIP_S = 10
 MINOR, MAJOR, TRACE = "#f6c9c9", "#e58f8f", "#1a1a1a"
+LINE_MM = 3.4                 # explanation text line height
 GAINS = (10, 20, 40, 80, 160)  # mm/mV; pick the smallest that makes R >= ~8 mm
 
 
@@ -80,8 +84,10 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
 
     margin, header, gap = 12, 22, 6
     fig_w = strip_w + 2 * margin
-    summary_h = (13 + len(a.notes)) * 5 + 12     # summary lines + disclaimer, mm
-    fig_h = header + n_strips * (strip_h + gap) + max(beat_h, summary_h) + gap + margin
+    summary_h = (11 + len(a.notes)) * 5 + 16     # summary lines + disclaimer, mm
+    expl = [(h, textwrap.wrap(t, 145)) for h, t in explain(a, device_hr)]
+    expl_h = 10 + sum(len(lines) * LINE_MM + 1.5 for _, lines in expl)
+    fig_h = header + n_strips * (strip_h + gap) + max(beat_h, summary_h) + gap + expl_h + margin
     fig = plt.figure(figsize=(fig_w * MM, fig_h * MM), dpi=150)
     fig.patch.set_facecolor("white")
 
@@ -164,14 +170,32 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
     for n in a.notes:
         lines.append(("Note", n))
     sx = (margin + beat_w + 10) / fig_w
+    typ = typical(a)
+    typ_key = {"Heart rate": "HR", "PR": "PR", "QRS": "QRS", "QT": "QT", "QTc Bazett": "QTc",
+               "QTc Fridericia": "QTc"}
+    fig.text(sx + 80 / fig_w, 1 - (by + 1) / fig_h, "Typical (adult, resting)", fontsize=6.5,
+             color="0.45", va="center", style="italic")
     for k, (label, val) in enumerate(lines):
         yy = 1 - (by + 6 + k * 5) / fig_h
         fig.text(sx, yy, label, fontsize=7.5, color="0.35", va="center")
         fig.text(sx + 34 / fig_w, yy, val, fontsize=7.5, va="center")
+        if label in typ_key and typ_key[label] in typ:
+            fig.text(sx + 80 / fig_w, yy, typ[typ_key[label]], fontsize=7, color="0.45", va="center")
     fig.text(sx, 1 - (by + 8 + len(lines) * 5) / fig_h,
              "Automated estimates from a single-lead handheld device; not a diagnosis.\n"
              "Amplitude: 500 counts/mV, calibrated against the Contec app display.",
              fontsize=6, color="0.45", va="top", style="italic")
+
+    # plain-language explanations, full width
+    ey = by + max(beat_h, summary_h) + gap
+    fig.text(margin / fig_w, 1 - ey / fig_h, "What these measurements mean",
+             fontsize=8.5, weight="bold", va="top")
+    ey += 7
+    for head, wrapped in expl:
+        fig.text(margin / fig_w, 1 - ey / fig_h, head, fontsize=6.8, weight="bold", va="top", color="0.2")
+        for j, line in enumerate(wrapped):
+            fig.text((margin + 36) / fig_w, 1 - (ey + j * LINE_MM) / fig_h, line, fontsize=6.8, va="top")
+        ey += len(wrapped) * LINE_MM + 1.5
 
     fig.savefig(path, dpi=150, facecolor="white")
     plt.close(fig)
