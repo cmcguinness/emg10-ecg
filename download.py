@@ -14,7 +14,8 @@ from pathlib import Path
 
 from ecg_analysis import analyze
 from ecg_plot import render
-from emg10 import BASELINE, EMG10, SAMPLE_RATE_HZ, EMG10Error, RecordingInfo, parse_header
+from emg10 import (BASELINE, EMG10, SAMPLE_RATE_HZ, EMG10Error, RecordingInfo, finding_labels,
+                   parse_header)
 
 
 def stem(info: RecordingInfo) -> str:
@@ -100,7 +101,7 @@ def session(args, waiting, verbose: bool, forced: set) -> bool:
             for i in infos:
                 when = i.recorded_at.isoformat(sep=" ") if i.recorded_at else "?"
                 print(f"  {i.index:3d}  {when}  HR {i.heart_rate:3d}  {i.duration_s:4.0f}s  "
-                      f"codes {i.result_codes}")
+                      f"{' + '.join(finding_labels(i.result_codes))}")
         if args.list:
             return True
 

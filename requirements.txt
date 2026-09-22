@@ -2,4 +2,4 @@ hidapi>=0.14
 numpy
 matplotlib
 neurokit2>=0.2.13
-fastapi
+scipy
