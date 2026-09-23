@@ -8,6 +8,12 @@ computer over an undocumented USB HID protocol. This project decodes that protoc
 recording to CSV, and renders each one as an ECG-paper report with interval measurements and
 plain-language explanations.
 
+**Why this exists:** the vendor's Mac app ("Portable ECG Monitor") is an Intel-only build that relies
+on Rosetta 2 and will not open on macOS 28 or later. EMAY's newer "EMAY ECG HD" app recognises the
+device but rejects it, because it speaks a different protocol. This project runs natively on Apple
+silicon, so an EMG-10 / PM10 stays readable after the vendor software stops working. (It is tested on
+macOS only; the USB library also supports Linux and Windows, but those are untested.)
+
 **Intended use:** educational and research software that lets technically skilled users inspect data
 from their own device. It is not intended for diagnosis, treatment, monitoring, or any other clinical
 or medical use. See [DISCLAIMER.md](DISCLAIMER.md).
@@ -37,11 +43,16 @@ The device's user manual (as the Contec PM10) is available on
 ## Quick start
 
 This project is provided as **source code for technically skilled users**, with no packaged app,
-installer or support. You are responsible for reading the code and deciding whether it is suitable for
-your purpose, and for setting up a hardware and software environment that can run it. Differences in
-operating system, Python and library versions, or USB hardware can affect results; install the tested
-versions pinned in `requirements.txt`, and note that each report records the versions that produced it. The methods and
-their known limitations are documented in the module docstrings and in [Limitations](#limitations). Requires Python 3.11+ and macOS, Linux or Windows with USB HID access.
+installer or support.
+
+- **Tested on:** macOS (Apple silicon), Python 3.13, with the library versions pinned in
+  `requirements.txt`. Linux and Windows are untested.
+- **Your responsibility:** reading the code, deciding whether it suits your purpose, and setting up
+  a hardware and software environment that can run it. Differences in operating system, Python,
+  library versions or USB hardware can change results; each report records the versions that
+  produced it.
+- **Methods and known limitations** are documented in the module docstrings and under
+  [Limitations](#limitations).
 
 ```bash
 pip install -r requirements.txt
