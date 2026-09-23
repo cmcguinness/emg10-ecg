@@ -21,8 +21,8 @@ or medical use. See [DISCLAIMER.md](DISCLAIMER.md).
 The device's user manual (as the Contec PM10) is available on
 [ManualsLib](https://www.manualslib.com/guide/2991328/contec-pm10-portable-ecg-monitor-manual.html).
 
-**How this was built:** the story of reverse-engineering the device with an AI coding agent, including
-the dead ends and mistakes, is in [BACKSTORY.md](BACKSTORY.md).
+**How this was built:** the article [Using AI to Rescue Old Hardware](https://mcguinnessai.substack.com/p/using-ai-to-rescue-old-hardware)
+tells the short version; the full story, including the dead ends and mistakes, is in [BACKSTORY.md](BACKSTORY.md).
 
 ![Example report](docs/example_report.png)
 <sub>Example report generated from a <b>simulated</b> ECG (`tools/make_example.py`), not a real recording.</sub>

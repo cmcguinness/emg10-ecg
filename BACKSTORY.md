@@ -1,8 +1,9 @@
 # Backstory: rescuing an orphaned ECG
 
-How this project came to exist, told in more detail than an article would carry. Written from my
-point of view; "Claude" is Claude Code, the AI coding agent I worked with. Everything here happened in
-one working session.
+How this project came to exist, told in more detail than an article would carry. (The article is
+[Using AI to Rescue Old Hardware](https://mcguinnessai.substack.com/p/using-ai-to-rescue-old-hardware).)
+Written from my point of view; "Claude" is Claude Code, the AI coding agent I worked with. The work
+happened over one long working session.
 
 ## The problem
 
