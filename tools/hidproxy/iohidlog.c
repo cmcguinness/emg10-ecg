@@ -1,6 +1,10 @@
 /*
- * DYLD_INSERT_LIBRARIES shim that logs IOKit HID traffic, used to capture how the
- * Contec "Portable ECG Monitor" app talks to the EMAY EMG-10 (Contec PM10).
+ * DYLD_INSERT_LIBRARIES shim that logs IOKit HID traffic.
+ *
+ * Written to capture how the Contec "Portable ECG Monitor" app talks to the EMAY EMG-10
+ * (Contec PM10), but it did NOT work for that app: it loads, yet the Mac App Store build's
+ * protections stop the interposed calls from taking effect. tools/lldb_capture.py was used
+ * instead. Kept for apps without those protections.
  *
  * Interposes the IOHIDDevice report calls and wraps input-report callbacks.
  * Logs to stderr (the app is sandboxed, so files outside its container are off-limits).

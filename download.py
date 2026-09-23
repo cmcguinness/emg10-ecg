@@ -17,8 +17,8 @@ from acknowledge import require_acknowledgement
 from ecg_analysis import analyze
 from ecg_plot import render
 from environment import summary as env_summary
-from emg10 import (BASELINE, EMG10, SAMPLE_RATE_HZ, EMG10Error, RecordingInfo, finding_labels,
-                   parse_header)
+from emg10 import (BASELINE, EMG10, SAMPLE_RATE_HZ, DeviceNotFound, EMG10Error, RecordingInfo,
+                   finding_labels, parse_header)
 
 
 def stem(info: RecordingInfo) -> str:
@@ -42,6 +42,8 @@ def save_png(path: Path, info: RecordingInfo, samples: list[int]):
 
 def replot(out: Path):
     """Regenerate every PNG from saved CSVs (no device needed)."""
+    if not (out / "index.csv").exists():
+        sys.exit(f"No recordings in {out}/ yet; run `python download.py` with the device first.")
     with (out / "index.csv").open() as f:
         infos = {r["file_stem"]: parse_header(bytes.fromhex(r["raw_header"])) for r in csv.DictReader(f)}
     for stem_, info in sorted(infos.items()):
@@ -93,6 +95,8 @@ def main():
         try:
             if session(args, waiting, verbose=first, forced=forced):
                 return
+        except DeviceNotFound as e:
+            sys.exit(f"{e}. Nothing was downloaded; saved files are unchanged.")
         except (OSError, EMG10Error) as e:
             print(f"\n  device disconnected ({e}); wake it to continue", file=sys.stderr)
         first = False
@@ -121,7 +125,7 @@ def session(args, waiting, verbose: bool, forced: set) -> bool:
             if base.with_suffix(".csv").exists() and (not args.force or base in forced):
                 continue
             samples = dev.download(
-                info, progress=lambda k, n: print(f"\r  #{info.index}: {k}/{n}", end="", file=sys.stderr))
+                info, progress=lambda k, n, i=info.index: print(f"\r  #{i}: {k}/{n}", end="", file=sys.stderr))
             print(file=sys.stderr)
             save_csv(base.with_suffix(".csv"), samples)
             save_png(base.with_suffix(".png"), info, samples)

@@ -292,7 +292,7 @@ def analyze(raw_counts) -> Analysis:
     rd = r[dom]
     rd_ok = rd[(rd >= pre) & (rd < len(mv) - post)]
     # RR only between consecutive beats that are both dominant
-    rr = [b - a for a, b, da, db in zip(r, r[1:], dom, dom[1:]) if da and db]
+    rr = [b - a for a, b, da, db in zip(r, r[1:], dom, dom[1:], strict=False) if da and db]
     rr_s = float(np.median(rr)) / FS if rr else None
     rr_cv, rr_rmssd = rhythm_variation(r, dom)
     if len(rd_ok) < 3:

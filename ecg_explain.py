@@ -152,8 +152,8 @@ def explain(a: Analysis, device_hr: int | None = None,
 
     if "QT" in iv:
         qtc = iv.get("QTcB")
-        txt = (f"Start of the QRS to the end of the T wave: the ventricles' full activate-and-recover "
-               f"cycle. QT naturally shortens as heart rate rises (roughly 350-450 ms at 60 bpm).")
+        txt = ("Start of the QRS to the end of the T wave: the ventricles' full activate-and-recover "
+               "cycle. QT naturally shortens as heart rate rises (roughly 350-450 ms at 60 bpm).")
         if a.rr_s:
             lo, hi = qt_range_for(a.rr_s)
             txt += (f" At this recording's rate ({60 / a.rr_s:.0f} bpm between main beats) a typical QT is "

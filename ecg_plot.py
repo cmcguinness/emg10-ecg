@@ -118,7 +118,7 @@ def render(path, a: Analysis, title: str, device_hr: int | None = None,
                         color="#8a6d00", style="italic")
         m = (t >= x0) & (t < x1)
         ax.plot(t[m], a.mv[m], color=TRACE, lw=0.6)
-        for p, d, o in zip(a.r_peaks, a.dominant, a.one_off_mask):
+        for p, d, o in zip(a.r_peaks, a.dominant, a.one_off_mask, strict=True):
             if x0 <= p / FS < x1:
                 style = ("v", 2.5, REF_C) if d else (("o", 2.5, ONE_OFF_C) if o else ("D", 3, OTHER_C))
                 ax.plot(p / FS, hi_mv - 0.07 * (hi_mv - lo_mv), marker=style[0], ms=style[1],

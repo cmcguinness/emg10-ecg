@@ -53,6 +53,10 @@ class EMG10Error(RuntimeError):
     pass
 
 
+class DeviceNotFound(EMG10Error):
+    """The device never appeared within the wait period."""
+
+
 def _u7(*parts: int) -> int:
     """Combine 7-bit groups, most significant first."""
     v = 0
@@ -119,7 +123,7 @@ class EMG10:
                 except OSError:
                     pass
             if time.monotonic() > deadline:
-                raise EMG10Error("EMG-10 not found; turn it on and connect the USB cable")
+                raise DeviceNotFound("EMG-10 not found; turn it on and connect the USB cable")
             if on_wait and not announced:
                 on_wait()
                 announced = True
