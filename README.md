@@ -105,7 +105,7 @@ Data bytes are 7-bit; multi-byte values are big-endian groups of 7 bits. Samples
 |---|---|
 | `emg10.py` | USB protocol, recording headers, device-finding codes |
 | `download.py` | Command-line downloader and report generation |
-| `ecg_analysis.py` | Beat detection (NeuroKit2), shape grouping, median beat, intervals |
+| `ecg_analysis.py` | Beat detection (NeuroKit2), shape grouping, median beat, intervals; see [METHODS.md](METHODS.md) |
 | `ecg_plot.py` | ECG-paper report rendering |
 | `ecg_explain.py` | Plain-language explanations and typical ranges |
 | `environment.py` | Records the software versions behind each report and `index.csv` row |
@@ -118,6 +118,9 @@ The EMG-10 filters its signal to **1-20 Hz** in firmware and zeroes out small si
 them, and there is no raw mode over USB. As a result P waves are usually lost (PR is rarely
 measurable), QRS tends to read short, and a hand-held two-thumb recording picks up noise. The device
 has no atrial fibrillation detection, and this software doesn't attempt it.
+
+For exactly how beats are found and intervals measured (which steps use NeuroKit2, which are this
+project's own, every threshold, and the known weaknesses), see [METHODS.md](METHODS.md).
 
 ## Disclaimer
 
